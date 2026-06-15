@@ -408,6 +408,14 @@ Erwan</textarea>
       el.panels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
     }
 
+function formatResult(res) {
+  if (res === "1-0") return "1 - 0";
+  if (res === "0-1") return "0 - 1";
+  if (res === "0.5-0.5") return "½ - ½";
+  return res || "?";
+}
+
+    
     function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
     function ceilLog2(n) { return Math.max(1, Math.ceil(Math.log(Math.max(1, n)) / Math.log(2))); }
     function escapeHtml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
