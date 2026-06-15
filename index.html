@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
-  <title>Tournoi Suisse Échecs - V2.1</title>
+  <title>Emental - V10.1 Pro. Correction rondes Expert.</title>
   <style>
     :root {
       --bg: #f4f7fb;
@@ -168,7 +168,7 @@
       .field { width: 100%; }
     }
 
-/* ===== V9.1 Modal ===== */
+/* ===== Emental V10.1 Pro ===== */
 .modal{
   position:fixed;
   top:0;
@@ -220,7 +220,13 @@
 
 
 
-  </style>
+  
+/* ===== Emental V10.1 Pro ===== */
+.modal-stack{display:grid;gap:12px}
+.impact-summary{background:#f8fafc;border:1px solid var(--border);padding:12px 14px;border-radius:14px;white-space:pre-wrap;line-height:1.45}
+.inline-field{margin-top:10px}
+
+</style>
 </head>
 
 
@@ -241,11 +247,25 @@
   </div>
 </div>
 
+
+<div id="correctionImpactModal" class="modal">
+  <div class="modal-content">
+    <h2>🛠️ Correction intelligente</h2>
+    <div id="correctionImpactSummary" class="impact-summary"></div>
+    <div class="modal-actions modal-stack">
+      <button class="button success" onclick="chooseCorrectionStrategy('manual')">✏️ Reprendre manuellement à partir de la ronde divergente</button>
+      <button class="button" onclick="chooseCorrectionStrategy('strict')">🔄 Recalculer strictement depuis la ronde divergente</button>
+      <button class="button secondary" onclick="chooseCorrectionStrategy('freeze')">🧷 Conserver les rondes déjà jouées malgré la divergence</button>
+    </div>
+  </div>
+</div>
+
   <div class="container">
     <div class="grid-top">
       <section class="card">
         <div class="card-header">
-          <h1 class="card-title">♟️ Tournoi Suisse 3.1 Sur une idée de Sullivan. Rondes Suisses.</p>
+          <h1 class="card-title">♟️ Tournoi Suisse Échecs</h1>
+          <p class="card-description">Version V9.2 – popup de validation + correction intelligente intégrée.</p>
         </div>
         <div class="card-body">
           <label class="label" for="playersInput">Liste des joueurs (un nom par ligne)</label>
@@ -339,10 +359,18 @@ Erwan</textarea>
             <div>
               <label class="label" for="roundCorrectionSelect">Reprendre à la ronde</label>
               <select id="roundCorrectionSelect"></select>
+              <div class="inline-field">
+                <label class="label" for="correctionModeSelect">Mode de reprise</label>
+                <select id="correctionModeSelect">
+                  <option value="auto">Réinjection intelligente (défaut)</option>
+                  <option value="strict">Recalcul strict des rondes suivantes</option>
+                  <option value="freeze">Conserver les rondes suivantes telles qu’elles ont été jouées</option>
+                </select>
+              </div>
             </div>
             <button class="button danger" onclick="restoreRoundForCorrection()">Corriger cette ronde</button>
           </div>
-          <div class="small-note">Cette action annule les rondes suivantes. La ronde choisie est restaurée avec ses appariements et ses résultats, que vous pourrez modifier avant de revalider.</div>
+          <div class="small-note">Après correction, l’application tente d’abord de réappliquer automatiquement les rondes futures si les appariements restent identiques. Si une divergence apparaît, vous choisissez alors comment continuer.</div>
         </div>
       </div>
     </section>
@@ -367,7 +395,7 @@ Erwan</textarea>
       </div>
     </section>
 
-    <section class="footer-note"><strong>Note :</strong> la sauvegarde automatique se fait dans le navigateur (localStorage). Pour Safari/iPhone et Android, utilisez cette appli via une URL (pas en fichier local). Développé par Erwan Perfetti 2026</section>
+    <section class="footer-note"><strong>Note :</strong> la sauvegarde automatique se fait dans le navigateur (localStorage). Pour Safari/iPhone et Android, utilisez cette appli via une URL (pas en fichier local). Développé par Erwan Perfetti, sur une idée de Sullivan Max. Emental 2026</section>
   </div>
 
   <script>
@@ -381,7 +409,7 @@ Erwan</textarea>
 
     var state = {
       players: [], pairings: [], started: false, currentRound: 0, totalRounds: 0,
-      warnings: [], message: '', lastSavedAt: null, activeTab: 'classement', roundSnapshots: []
+      warnings: [], message: '', lastSavedAt: null, activeTab: 'classement', roundSnapshots: [], replayQueue: [], correctionMode: 'auto', pendingCorrectionContext: null
     };
 
     var el = {};
@@ -402,23 +430,16 @@ Erwan</textarea>
       el.chartLegend = document.getElementById('chartLegend');
       el.historyGrid = document.getElementById('historyGrid');
       el.roundCorrectionSelect = document.getElementById('roundCorrectionSelect');
+      el.correctionModeSelect = document.getElementById('correctionModeSelect');
       el.correctionBox = document.getElementById('correctionBox');
       el.startBtn = document.getElementById('startBtn');
       el.tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
       el.panels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
     }
 
-function formatResult(res) {
-  if (res === "1-0") return "1 - 0";
-  if (res === "0-1") return "0 - 1";
-  if (res === "0.5-0.5") return "½ - ½";
-  return res || "?";
-}
-
-    
     function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
     function ceilLog2(n) { return Math.max(1, Math.ceil(Math.log(Math.max(1, n)) / Math.log(2))); }
-    function escapeHtml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+    function escapeHtml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#039;'); }
     function formatScore(x) { return Number.isInteger(x) ? String(x) : String(x).replace('.5', ',5'); }
 
     function parsePlayers(text) {
@@ -592,7 +613,154 @@ function formatResult(res) {
       });
       return computeBuchholz(Array.from(map.values())).sort(comparePlayers);
     }
-    function getTopPlayersForChart(players, topN) { return players.slice().sort(comparePlayers).slice(0, Math.max(1, Math.min(topN, players.length))); }
+    function formatResult(res) {
+      if (res === '1-0') return '1 - 0';
+      if (res === '0-1') return '0 - 1';
+      if (res === '0.5-0.5') return '½ - ½';
+      return res || '?';
+    }
+    function pairingReplayKey(pairing) {
+      if (pairing.type === 'bye') return 'bye|' + pairing.playerId;
+      return 'match|' + pairing.whiteId + '|' + pairing.blackId;
+    }
+    function arePairingsCompatible(generatedPairings, preservedPairings) {
+      if (!generatedPairings || !preservedPairings) return false;
+      if (generatedPairings.length !== preservedPairings.length) return false;
+      var a = generatedPairings.map(pairingReplayKey).sort();
+      var b = preservedPairings.map(pairingReplayKey).sort();
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    function copyResultsOntoPairings(generatedPairings, preservedPairings) {
+      var resultMap = {};
+      preservedPairings.forEach(function (p) { resultMap[pairingReplayKey(p)] = p.result || ''; });
+      return generatedPairings.map(function (p) {
+        var cp = deepCopy(p);
+        if (Object.prototype.hasOwnProperty.call(resultMap, pairingReplayKey(p))) cp.result = resultMap[pairingReplayKey(p)];
+        return cp;
+      });
+    }
+    function listRoundsLabel(startRound, endRound) {
+      return startRound === endRound ? ('ronde ' + startRound) : ('rondes ' + startRound + ' à ' + endRound);
+    }
+    function advancedCorrectionSummary(ctx) {
+      var base = 'La correction modifie les appariements à partir de la ronde ' + ctx.blockedRound + '.\n';
+      if (ctx.replayedRounds && ctx.replayedRounds.length) {
+        base += 'Réinjection automatique réussie pour les ' + listRoundsLabel(ctx.replayedRounds[0], ctx.replayedRounds[ctx.replayedRounds.length - 1]) + '.\n';
+      }
+      base += '\nChoisissez comment continuer :\n'
+        + '• Reprendre manuellement : la ronde divergente est générée, vous saisissez la suite vous-même.\n'
+        + '• Recalcul strict : même comportement, mais on oublie les anciennes rondes restantes.\n'
+        + '• Conserver les rondes jouées : on réapplique les appariements/résultats enregistrés malgré la divergence.';
+      return base;
+    }
+    function saveCurrentRoundSnapshotWithPairings(pairingsToSave, warningsToSave) {
+      var snapshot = { round: state.currentRound, players: deepCopy(state.players), pairings: deepCopy(pairingsToSave), warnings: deepCopy(warningsToSave || []), totalRounds: state.totalRounds, started: state.started, activeTab: state.activeTab || 'classement' };
+      state.roundSnapshots = state.roundSnapshots.filter(function (s) { return s.round !== snapshot.round; });
+      state.roundSnapshots.push(snapshot);
+      state.roundSnapshots.sort(function (a, b) { return a.round - b.round; });
+    }
+    function applyFreezeQueue(startPlayers, queue) {
+      var players = deepCopy(startPlayers);
+      var first = queue.length ? queue[0].round : null;
+      var last = queue.length ? queue[queue.length - 1].round : null;
+      queue.forEach(function (entry) {
+        state.currentRound = entry.round;
+        state.pairings = deepCopy(entry.pairings);
+        state.warnings = ['Ronde conservée telle qu’elle a été jouée malgré une divergence des appariements suisses.'];
+        players = applyRoundResults(players, entry.pairings);
+        state.players = players;
+        saveCurrentRoundSnapshotWithPairings(state.pairings, state.warnings);
+      });
+      if (queue.length) {
+        state.currentRound = last;
+      }
+      return { players: players, first: first, last: last };
+    }
+    function closeCorrectionImpactModal() {
+      var modal = document.getElementById('correctionImpactModal');
+      if (modal) modal.style.display = 'none';
+    }
+    function chooseCorrectionStrategy(strategy) {
+      var ctx = state.pendingCorrectionContext;
+      if (!ctx) {
+        closeCorrectionImpactModal();
+        return;
+      }
+      closeCorrectionImpactModal();
+      if (strategy === 'freeze') {
+        var keepResult = applyFreezeQueue(ctx.playersBeforeBlockedRound, ctx.remainingQueue);
+        state.players = keepResult.players;
+        state.pairings = [];
+        state.warnings = ['Correction locale appliquée. Les rondes futures ont été conservées telles qu’elles ont été jouées.'];
+        state.replayQueue = [];
+        state.pendingCorrectionContext = null;
+        setMessage('Correction appliquée. Les ' + listRoundsLabel(keepResult.first, keepResult.last) + ' ont été conservées malgré la divergence des appariements.');
+        saveToLocalStorage();
+        renderAll();
+        return;
+      }
+      state.players = deepCopy(ctx.playersBeforeBlockedRound);
+      state.currentRound = ctx.blockedRound;
+      state.pairings = deepCopy(ctx.generatedPairings);
+      state.warnings = deepCopy(ctx.generatedWarnings || []);
+      state.replayQueue = strategy === 'manual' ? deepCopy(ctx.remainingQueue) : [];
+      state.pendingCorrectionContext = null;
+      if (strategy === 'strict') {
+        setMessage('Mode strict activé : la ronde ' + ctx.blockedRound + ' a été recalculée. Les anciennes rondes restantes ont été abandonnées.');
+      } else {
+        setMessage('Correction intelligente stoppée à la ronde ' + ctx.blockedRound + '. Vérifiez cette ronde puis revalidez pour continuer.');
+      }
+      saveCurrentRoundSnapshotWithPairings(state.pairings, state.warnings);
+      saveToLocalStorage();
+      renderAll();
+    }
+    function replayFutureRoundsFrom(playersAfterCurrentRound, currentRoundNumber) {
+      var queue = Array.isArray(state.replayQueue) ? deepCopy(state.replayQueue) : [];
+      var replayedRounds = [];
+      var players = deepCopy(playersAfterCurrentRound);
+      var round = currentRoundNumber;
+      if (state.correctionMode === 'strict' || queue.length === 0) {
+        return { status: 'strict', players: players, replayedRounds: replayedRounds };
+      }
+      if (state.correctionMode === 'freeze') {
+        var freezeRes = applyFreezeQueue(players, queue);
+        return { status: 'finished_freeze', players: freezeRes.players, replayedRounds: replayedRounds.concat(queue.map(function(q){return q.round;})), firstFrozen: freezeRes.first, lastFrozen: freezeRes.last };
+      }
+      while (queue.length && round < state.totalRounds) {
+        var nextRound = round + 1;
+        var built = buildSwissPairings(players, nextRound);
+        var preserved = queue[0];
+        if (!preserved || preserved.round !== nextRound) {
+          return { status: 'strict', players: players, replayedRounds: replayedRounds };
+        }
+        if (!arePairingsCompatible(built.pairings, preserved.pairings)) {
+          return {
+            status: 'divergence',
+            playersBeforeBlockedRound: players,
+            blockedRound: nextRound,
+            generatedPairings: built.pairings,
+            generatedWarnings: built.warnings,
+            remainingQueue: queue,
+            replayedRounds: replayedRounds
+          };
+        }
+        var pairingsWithResults = copyResultsOntoPairings(built.pairings, preserved.pairings);
+        players = applyRoundResults(players, pairingsWithResults);
+        round = nextRound;
+        state.players = players;
+        state.currentRound = round;
+        state.pairings = pairingsWithResults;
+        state.warnings = built.warnings;
+        saveCurrentRoundSnapshotWithPairings(state.pairings, state.warnings);
+        replayedRounds.push(nextRound);
+        queue.shift();
+      }
+      return { status: 'finished_auto', players: players, replayedRounds: replayedRounds };
+    }
+function getTopPlayersForChart(players, topN) { return players.slice().sort(comparePlayers).slice(0, Math.max(1, Math.min(topN, players.length))); }
     function chartRounds(currentRound) { return Array.from({ length: currentRound + 1 }, function (_, i) { return i; }); }
     function setMessage(text) {
       state.message = text || '';
@@ -636,7 +804,7 @@ function formatResult(res) {
         var payload = JSON.parse(raw);
         if (payload.playersInput) el.playersInput.value = payload.playersInput;
         if (payload.topN) el.topNInput.value = payload.topN;
-        if (payload.state) { state = payload.state; if (!state.roundSnapshots) state.roundSnapshots = []; }
+        if (payload.state) { state = payload.state; if (!state.roundSnapshots) state.roundSnapshots = []; if (!state.replayQueue) state.replayQueue = []; if (!state.correctionMode) state.correctionMode = 'auto'; if (!('pendingCorrectionContext' in state)) state.pendingCorrectionContext = null; }
         if (state.activeTab) activateTab(state.activeTab, false);
         updateAutosaveBanner();
         if (state.started || payload.playersInput) setMessage(state.started ? 'Tournoi restauré depuis la sauvegarde locale.' : 'Liste restaurée depuis la sauvegarde locale.');
@@ -713,7 +881,7 @@ function formatResult(res) {
     function clearPlayers() {
       if (!confirm('Effacer toute la liste des joueurs ?')) return;
       el.playersInput.value = '';
-      state = { players: [], pairings: [], started: false, currentRound: 0, totalRounds: 0, warnings: [], message: '', lastSavedAt: state.lastSavedAt || null, activeTab: state.activeTab || 'classement', roundSnapshots: [] };
+      state = { players: [], pairings: [], started: false, currentRound: 0, totalRounds: 0, warnings: [], message: '', lastSavedAt: state.lastSavedAt || null, activeTab: state.activeTab || 'classement', roundSnapshots: [], replayQueue: [], correctionMode: 'auto', pendingCorrectionContext: null };
       setMessage('Liste des joueurs effacée.');
       saveToLocalStorage();
       renderAll();
@@ -885,6 +1053,9 @@ function formatResult(res) {
       state.warnings = built.warnings;
       state.started = true;
       state.roundSnapshots = [];
+      state.replayQueue = [];
+      state.pendingCorrectionContext = null;
+      state.correctionMode = 'auto';
       saveRoundSnapshot();
       setMessage('Tournoi initialisé.');
       saveToLocalStorage();
@@ -892,7 +1063,7 @@ function formatResult(res) {
     }
     function resetTournament() {
       var currentPlayers = state.players && state.players.length ? state.players.map(function (p) { return p.name; }).join('\n') : el.playersInput.value;
-      state = { players: [], pairings: [], started: false, currentRound: 0, totalRounds: 0, warnings: [], message: '', lastSavedAt: state.lastSavedAt || null, activeTab: state.activeTab || 'classement', roundSnapshots: [] };
+      state = { players: [], pairings: [], started: false, currentRound: 0, totalRounds: 0, warnings: [], message: '', lastSavedAt: state.lastSavedAt || null, activeTab: state.activeTab || 'classement', roundSnapshots: [], replayQueue: [], correctionMode: 'auto', pendingCorrectionContext: null };
       el.playersInput.value = currentPlayers;
       setMessage('Tournoi réinitialisé. La liste des joueurs est conservée.');
       saveToLocalStorage();
@@ -906,18 +1077,7 @@ function formatResult(res) {
       saveToLocalStorage();
       updateStartButtonLabel();
     }
-
-    
-    
-function formatResult(res) {
-  if (res === "1-0") return "1 - 0";
-  if (res === "0-1") return "0 - 1";
-  if (res === "0.5-0.5") return "½ - ½";
-  return res || "?";
-}
-
-    
-    function validateRound() {
+function validateRound() {
   const ok = state.pairings.every(p=>p.type==='bye'||!!p.result);
 
   if(!ok){
@@ -976,9 +1136,41 @@ function closeValidationPopup(){
         state.players = updatedPlayers;
         state.pairings = [];
         state.warnings = [];
+        state.replayQueue = [];
+        state.pendingCorrectionContext = null;
         setMessage('Tournoi terminé. Le classement final est disponible ci-dessous.');
         saveToLocalStorage();
         renderAll();
+        return;
+      }
+      var replayResult = replayFutureRoundsFrom(updatedPlayers, state.currentRound);
+      if (replayResult.status === 'finished_auto') {
+        state.players = replayResult.players;
+        state.pairings = [];
+        state.warnings = [];
+        state.replayQueue = [];
+        state.pendingCorrectionContext = null;
+        setMessage(replayResult.replayedRounds.length ? ('Correction appliquée. Les ' + listRoundsLabel(replayResult.replayedRounds[0], replayResult.replayedRounds[replayResult.replayedRounds.length - 1]) + ' ont été réinjectées automatiquement.') : 'Correction appliquée.');
+        saveToLocalStorage();
+        renderAll();
+        return;
+      }
+      if (replayResult.status === 'finished_freeze') {
+        state.players = replayResult.players;
+        state.pairings = [];
+        state.warnings = [];
+        state.replayQueue = [];
+        state.pendingCorrectionContext = null;
+        setMessage('Correction locale appliquée. Les ' + listRoundsLabel(replayResult.firstFrozen, replayResult.lastFrozen) + ' ont été conservées telles qu’elles ont été jouées.');
+        saveToLocalStorage();
+        renderAll();
+        return;
+      }
+      if (replayResult.status === 'divergence') {
+        state.pendingCorrectionContext = deepCopy(replayResult);
+        document.getElementById('correctionImpactSummary').textContent = advancedCorrectionSummary(replayResult);
+        document.getElementById('correctionImpactModal').style.display = 'flex';
+        saveToLocalStorage();
         return;
       }
       var nextRound = state.currentRound + 1;
@@ -987,7 +1179,9 @@ function closeValidationPopup(){
       state.currentRound = nextRound;
       state.pairings = built.pairings;
       state.warnings = built.warnings;
-      saveRoundSnapshot();
+      state.replayQueue = [];
+      state.pendingCorrectionContext = null;
+      saveCurrentRoundSnapshotWithPairings(state.pairings, state.warnings);
       setMessage('Ronde ' + nextRound + ' générée.');
       saveToLocalStorage();
       renderAll();
@@ -1000,6 +1194,9 @@ function closeValidationPopup(){
         if (state.roundSnapshots[i].round === round) { snap = state.roundSnapshots[i]; break; }
       }
       if (!snap) { setMessage('Impossible de retrouver cette ronde.'); return; }
+      var preservedFuture = state.roundSnapshots.filter(function (s) { return s.round > round; }).map(function (s) {
+        return { round: s.round, pairings: deepCopy(s.pairings) };
+      });
       state.players = deepCopy(snap.players);
       state.pairings = deepCopy(snap.pairings);
       state.warnings = deepCopy(snap.warnings || []);
@@ -1007,7 +1204,18 @@ function closeValidationPopup(){
       state.currentRound = snap.round;
       state.totalRounds = snap.totalRounds;
       state.roundSnapshots = state.roundSnapshots.filter(function (s) { return s.round <= round; });
-      setMessage('Ronde ' + round + ' restaurée pour correction. Les rondes suivantes ont été annulées.');
+      state.replayQueue = preservedFuture;
+      state.pendingCorrectionContext = null;
+      state.correctionMode = el.correctionModeSelect ? el.correctionModeSelect.value : 'auto';
+      if (state.correctionMode === 'strict') {
+        setMessage('Ronde ' + round + ' restaurée pour correction en mode strict. Les rondes suivantes seront recalculées.');
+      } else if (state.correctionMode === 'freeze') {
+        setMessage('Ronde ' + round + ' restaurée pour correction. Les rondes futures seront conservées telles qu’elles ont été jouées.');
+      } else if (preservedFuture.length > 0) {
+        setMessage('Ronde ' + round + ' restaurée pour correction. L’application tentera une réinjection intelligente des ' + listRoundsLabel(preservedFuture[0].round, preservedFuture[preservedFuture.length - 1].round) + '.');
+      } else {
+        setMessage('Ronde ' + round + ' restaurée pour correction.');
+      }
       saveToLocalStorage();
       renderAll();
     }
@@ -1024,6 +1232,10 @@ function closeValidationPopup(){
       el.playersInput.addEventListener('input', function () { saveToLocalStorage(); updateStartButtonLabel(); });
       window.addEventListener('resize', drawChart);
       window.addEventListener('beforeunload', saveToLocalStorage);
+      window.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'validationModal') closeValidationPopup();
+        if (e.target && e.target.id === 'correctionImpactModal') closeCorrectionImpactModal();
+      });
     }
     (function initApp() {
       wireDomRefs();
